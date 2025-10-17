@@ -14,25 +14,38 @@ pipeline {
     stages {
         stage('Prepare Tools') {
             steps {
-                echo 'Installing required tools...'
+                echo '🔧 Installing required tools for Ubuntu...'
                 sh '''
+                    set -e
+
+                    # Update system
+                    sudo apt-get update -y
+
+                    # Python3 and pip
                     if ! command -v pip3 &>/dev/null; then
-                        sudo yum install -y python3 python3-pip || true
+                        sudo apt-get install -y python3 python3-pip
                     fi
 
-                    pip3 install --quiet cmakelint
+                    # cmakelint setup using venv to avoid PEP 668 restriction
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install --upgrade pip
+                    pip install cmakelint
+                    deactivate
 
+                    # dos2unix
                     if ! command -v dos2unix &>/dev/null; then
-                        sudo yum install -y dos2unix || true
+                        sudo apt-get install -y dos2unix
                     fi
 
+                    # CMake
                     if ! command -v cmake &>/dev/null; then
-                        sudo yum install -y epel-release || true
-                        sudo yum install -y cmake || true
+                        sudo apt-get install -y cmake
                     fi
 
+                    # GCC/G++
                     if ! command -v gcc &>/dev/null; then
-                        sudo yum install -y gcc gcc-c++ || true
+                        sudo apt-get install -y build-essential
                     fi
                 '''
             }
@@ -54,14 +67,16 @@ pipeline {
 
         stage('Lint') {
             steps {
-                echo 'Running lint checks on main.c...'
+                echo '🔍 Running lint checks on main.c...'
                 sh '''
+                    . venv/bin/activate
                     if [ -f src/main.c ]; then
                         cmakelint src/main.c > lint_report.txt
                     else
                         echo "main.c not found!"
                         exit 1
                     fi
+                    deactivate
                 '''
             }
             post {
@@ -74,7 +89,7 @@ pipeline {
 
         stage('Build') {
             steps {
-                echo 'Running build with CMake...'
+                echo 'Building project with CMake...'
                 sh '''
                     if [ -f CMakeLists.txt ]; then
                         mkdir -p build
@@ -124,6 +139,7 @@ pipeline {
 
         stage('Upload to Artifactory') {
             steps {
+                echo 'Uploading binary to Artifactory...'
                 withCredentials([string(credentialsId: 'JFrog-Jenkins', variable: 'ACCESS_TOKEN')]) {
                     sh '''
                         ARTIFACT_PATH="build/myfirmware.bin"
@@ -143,7 +159,7 @@ pipeline {
                             "$UPLOAD_URL")
 
                         if [ "$HTTP_RESPONSE" -ge 200 ] && [ "$HTTP_RESPONSE" -lt 300 ]; then
-                            echo "Upload successful!"
+                            echo "Upload successful (HTTP $HTTP_RESPONSE)"
                         else
                             echo "Upload failed with HTTP code $HTTP_RESPONSE"
                             exit 1
@@ -156,7 +172,7 @@ pipeline {
 
     post {
         always {
-            echo 'Pipeline finished.'
+            echo '🏁 Pipeline finished.'
         }
         success {
             echo 'Build, lint, and SonarCloud analysis completed successfully!'

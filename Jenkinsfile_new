@@ -44,12 +44,14 @@ pipeline {
                 deleteDir()
             }
         }
+
         stage('Checkout') {
             steps {
                 echo "Cloning repository from ${GIT_REPO} (branch: ${BRANCH})"
                 git branch: "${BRANCH}", url: "${GIT_REPO}"
             }
         }
+
         stage('Lint') {
             steps {
                 echo 'Running lint checks on main.c...'
@@ -119,20 +121,19 @@ pipeline {
                 }
             }
         }
-    }
-    stage('Upload to Artifactory') {
+
+        stage('Upload to Artifactory') {
             steps {
                 withCredentials([string(credentialsId: 'JFrog-Jenkins', variable: 'ACCESS_TOKEN')]) {
                     sh '''
                         ARTIFACT_PATH="build/myfirmware.bin"
-                        ARTIFACT_NAME=$(basename $ARTIFACT_PATH)
+                        ARTIFACT_NAME=$(basename "$ARTIFACT_PATH")
 
                         if [ ! -f "$ARTIFACT_PATH" ]; then
-                            echo " Artifact file not found at $ARTIFACT_PATH"
+                            echo "Artifact file not found at $ARTIFACT_PATH"
                             exit 1
                         fi
 
-                        # Deploy to repo root (works reliably)
                         UPLOAD_URL="http://13.222.155.192:8081/artifactory/cmake-snapshot/$ARTIFACT_NAME"
                         echo "Uploading $ARTIFACT_NAME to $UPLOAD_URL ..."
 
@@ -149,8 +150,10 @@ pipeline {
                         fi
                     '''
                 }
-            }
-        }
+            }
+        }
+    }
+
     post {
         always {
             echo 'Pipeline finished.'

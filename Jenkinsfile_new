@@ -14,11 +14,9 @@ pipeline {
     stages {
         stage('Prepare Tools') {
             steps {
-                echo '🔧 Installing required tools for Ubuntu...'
+                echo 'Installing required tools...'
                 sh '''
                     set -e
-
-                    # Update system
                     sudo apt-get update -y
 
                     # Python3 and pip
@@ -26,7 +24,7 @@ pipeline {
                         sudo apt-get install -y python3 python3-pip
                     fi
 
-                    # cmakelint setup using venv to avoid PEP 668 restriction
+                    # cmakelint setup using venv to avoid PEP 668 restrictions
                     python3 -m venv venv
                     . venv/bin/activate
                     pip install --upgrade pip
@@ -53,7 +51,7 @@ pipeline {
 
         stage('Clean Workspace') {
             steps {
-                echo "Cleaning Workspace..."
+                echo "Cleaning workspace..."
                 deleteDir()
             }
         }
@@ -67,7 +65,7 @@ pipeline {
 
         stage('Lint') {
             steps {
-                echo '🔍 Running lint checks on main.c...'
+                echo 'Running lint checks on main.c...'
                 sh '''
                     . venv/bin/activate
                     if [ -f src/main.c ]; then
@@ -89,7 +87,7 @@ pipeline {
 
         stage('Build') {
             steps {
-                echo 'Building project with CMake...'
+                echo 'Running build with CMake...'
                 sh '''
                     if [ -f CMakeLists.txt ]; then
                         mkdir -p build
@@ -139,7 +137,7 @@ pipeline {
 
         stage('Upload to Artifactory') {
             steps {
-                echo 'Uploading binary to Artifactory...'
+                echo 'Uploading .bin file to Artifactory...'
                 withCredentials([string(credentialsId: 'JFrog-Jenkins', variable: 'ACCESS_TOKEN')]) {
                     sh '''
                         ARTIFACT_PATH="build/myfirmware.bin"
@@ -159,9 +157,33 @@ pipeline {
                             "$UPLOAD_URL")
 
                         if [ "$HTTP_RESPONSE" -ge 200 ] && [ "$HTTP_RESPONSE" -lt 300 ]; then
-                            echo "Upload successful (HTTP $HTTP_RESPONSE)"
+                            echo "Upload successful with HTTP code $HTTP_RESPONSE"
                         else
                             echo "Upload failed with HTTP code $HTTP_RESPONSE"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Verify Upload') {
+            steps {
+                echo 'Verifying artifact upload...'
+                withCredentials([string(credentialsId: 'JFrog-Jenkins', variable: 'ACCESS_TOKEN')]) {
+                    sh '''
+                        ARTIFACT_NAME="myfirmware.bin"
+                        VERIFY_URL="http://13.222.155.192:8081/artifactory/cmake-snapshot/$ARTIFACT_NAME"
+
+                        echo "Checking artifact existence at $VERIFY_URL"
+                        HTTP_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+                            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+                            -I "$VERIFY_URL")
+
+                        if [ "$HTTP_RESPONSE" -eq 200 ]; then
+                            echo "Artifact verified successfully (HTTP 200)"
+                        else
+                            echo "Artifact verification failed (HTTP $HTTP_RESPONSE)"
                             exit 1
                         fi
                     '''
@@ -172,10 +194,10 @@ pipeline {
 
     post {
         always {
-            echo '🏁 Pipeline finished.'
+            echo 'Pipeline finished.'
         }
         success {
-            echo 'Build, lint, and SonarCloud analysis completed successfully!'
+            echo 'Build, lint, SonarCloud analysis, and artifact upload completed successfully.'
             echo 'Archiving build artifacts...'
             archiveArtifacts artifacts: 'build/*', onlyIfSuccessful: true
         }

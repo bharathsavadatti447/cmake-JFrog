@@ -2,7 +2,7 @@ pipeline {
     agent { label 'Node-Linux' }
 
     environment {
-        GIT_REPO = 'https://github.com/bharathsavadatti447/cmake_project.git'
+        GIT_REPO = 'https://github.com/bharathsavadatti447/cmake-JFrog.git'
         BRANCH = 'main'
 
         // SonarCloud Configuration
@@ -44,14 +44,12 @@ pipeline {
                 deleteDir()
             }
         }
-
         stage('Checkout') {
             steps {
                 echo "Cloning repository from ${GIT_REPO} (branch: ${BRANCH})"
                 git branch: "${BRANCH}", url: "${GIT_REPO}"
             }
         }
-
         stage('Lint') {
             steps {
                 echo 'Running lint checks on main.c...'
@@ -153,7 +151,6 @@ pipeline {
                 }
             }
         }
-
     post {
         always {
             echo 'Pipeline finished.'
